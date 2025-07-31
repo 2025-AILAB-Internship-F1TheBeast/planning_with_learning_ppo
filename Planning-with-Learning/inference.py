@@ -131,10 +131,31 @@ def main():
         num_lidar_scan=108,
         ctrl_method=method,
     )
+
+    # model = Agent(rl_env)
+    # model.load_state_dict(
+    #     torch.load(f"pkls/nudge_2s_4obs_10m.pkl")
+    # )  # !!!! modify load model
+
     model = Agent(rl_env)
+
+    # Device setup for cross-platform compatibility
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")  # For M1 Mac
+    else:
+        device = torch.device("cpu")
+
+    # Modified line 85 - load model with device mapping
     model.load_state_dict(
-        torch.load(f"pkls/nudge_2s_4obs_10m.pkl")
+        torch.load(
+            f"pkls/nudge_2s_4obs_10m.pkl", map_location=device, weights_only=True
+        )
     )  # !!!! modify load model
+
+    # Move model to the appropriate device
+    model = model.to(device)
 
     while not done:
         if method == "pure_pursuit" and rl_planner:
@@ -168,13 +189,15 @@ def main():
             )
             network_obs = (
                 torch.from_numpy(network_obs)
-                .to(dtype=torch.float)
-                .resize(1, network_obs.shape[0])
+                .to(dtype=torch.float, device=device)
+                .unsqueeze(0)
+                # .resize(1, network_obs.shape[0])
             )
             action, sum_log_prob, sum_entropy, value = model.get_action_and_value(
                 network_obs
             )  # PPO inference
-            offset = action.numpy().flatten()
+            # offset = action.numpy().flatten()
+            offset = action.cpu().numpy().flatten()
             print(offset)
 
             # add offsets on horizon traj & densify offset traj to 80 points & get lookahead point & pure pursuit
@@ -303,7 +326,7 @@ def main():
             action, sum_log_prob, sum_entropy, value = model.get_action_and_value(
                 network_obs
             )  # PPO inference
-            offset = action.numpy().flatten()
+            offset = action.cpu().numpy().flatten()
             print(offset)
 
             # add offsets on horizon traj & densify offset traj to 80 points & get lookahead point & pure pursuit

@@ -1,6 +1,6 @@
 """
-    Modified PPO for Continuous Action
-    References: https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_continuous_actionpy
+Modified PPO for Continuous Action
+References: https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_continuous_actionpy
 """
 
 import argparse
@@ -98,10 +98,26 @@ def parse_args():
     return args
 
 
-def make_env(env_id, idx, capture_video, run_name, gamma, render_flag, map_name, num_obstacles, num_lidar_scan, ctrl_method):
+def make_env(
+    env_id,
+    idx,
+    capture_video,
+    run_name,
+    gamma,
+    render_flag,
+    map_name,
+    num_obstacles,
+    num_lidar_scan,
+    ctrl_method,
+):
     def thunk():
-        env = F110RLEnv(render=render_flag, map_name=map_name, num_obstacles=num_obstacles,
-                        num_lidar_scan=num_lidar_scan, ctrl_method=ctrl_method)
+        env = F110RLEnv(
+            render=render_flag,
+            map_name=map_name,
+            num_obstacles=num_obstacles,
+            num_lidar_scan=num_lidar_scan,
+            ctrl_method=ctrl_method,
+        )
         # if capture_video:
         #     env.f110.add_render_callback(env.opponent_renderer.render_waypoints)
         #     env.f110.add_render_callback(env.main_renderer.render_waypoints)
@@ -139,7 +155,9 @@ class Agent(nn.Module):
         #     layer_init(nn.Linear(64, 1), std=1.0),
         # )
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(np.array(envs.single_observation_space.shape).prod(), 256)),
+            layer_init(
+                nn.Linear(np.array(envs.single_observation_space.shape).prod(), 256)
+            ),
             nn.Tanh(),
             layer_init(nn.Linear(256, 256)),
             nn.Tanh(),
@@ -158,7 +176,9 @@ class Agent(nn.Module):
         #     layer_init(nn.Linear(64, np.prod(envs.single_action_space.shape)), std=0.01),
         # )
         self.actor_mean = nn.Sequential(
-            layer_init(nn.Linear(np.array(envs.single_observation_space.shape).prod(), 256)),
+            layer_init(
+                nn.Linear(np.array(envs.single_observation_space.shape).prod(), 256)
+            ),
             nn.Tanh(),
             layer_init(nn.Linear(256, 256)),
             nn.Tanh(),
@@ -166,10 +186,14 @@ class Agent(nn.Module):
             nn.Tanh(),
             layer_init(nn.Linear(256, 256)),
             nn.Tanh(),
-            layer_init(nn.Linear(256, np.prod(envs.single_action_space.shape)), std=0.01),
+            layer_init(
+                nn.Linear(256, np.prod(envs.single_action_space.shape)), std=0.01
+            ),
         )
 
-        self.actor_logstd = nn.Parameter(torch.zeros(1, np.prod(envs.single_action_space.shape)))
+        self.actor_logstd = nn.Parameter(
+            torch.zeros(1, np.prod(envs.single_action_space.shape))
+        )
 
     def get_value(self, x):
         return self.critic(x)
@@ -181,7 +205,12 @@ class Agent(nn.Module):
         probs = Normal(action_mean, action_std)
         if action is None:
             action = probs.sample()
-        return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(x)
+        return (
+            action,
+            probs.log_prob(action).sum(1),
+            probs.entropy().sum(1),
+            self.critic(x),
+        )
 
 
 if __name__ == "__main__":
@@ -204,7 +233,8 @@ if __name__ == "__main__":
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
         "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+        "|param|value|\n|-|-|\n%s"
+        % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
     )
 
     # TRY NOT TO MODIFY: seeding
@@ -217,18 +247,37 @@ if __name__ == "__main__":
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.env_id, i, args.capture_video, run_name, args.gamma, args.render, args.map_name,
-                  args.num_obstacles, args.num_lidar_scan, args.ctrl_method) for i in range(args.num_envs)]
+        [
+            make_env(
+                args.env_id,
+                i,
+                args.capture_video,
+                run_name,
+                args.gamma,
+                args.render,
+                args.map_name,
+                args.num_obstacles,
+                args.num_lidar_scan,
+                args.ctrl_method,
+            )
+            for i in range(args.num_envs)
+        ]
     )
-    assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
+    assert isinstance(
+        envs.single_action_space, gym.spaces.Box
+    ), "only continuous action space is supported"
 
     agent = Agent(envs).to(device)
-    agent.load_state_dict(torch.load(f'pkls/bt_2s_pp_2m.pkl'))  # !!!! 回锅肉！
+    agent.load_state_dict(torch.load(f"pkls/bt_2s_pp_2m.pkl"))  # !!!! 回锅肉！
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # ALGO Logic: Storage setup
-    obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
-    actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space.shape).to(device)
+    obs = torch.zeros(
+        (args.num_steps, args.num_envs) + envs.single_observation_space.shape
+    ).to(device)
+    actions = torch.zeros(
+        (args.num_steps, args.num_envs) + envs.single_action_space.shape
+    ).to(device)
     logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
@@ -242,7 +291,7 @@ if __name__ == "__main__":
     next_done = torch.zeros(args.num_envs).to(device)
     num_updates = args.total_timesteps // args.batch_size
     video_filenames = set()
-    high_reward = float('-inf')
+    high_reward = float("-inf")
     save_count = 1
 
     for update in tqdm(range(1, num_updates + 1)):
@@ -265,11 +314,15 @@ if __name__ == "__main__":
             logprobs[step] = logprob
 
             # TRY NOT TO MODIFY: execute the game and log data.
-            next_obs, reward, done, infos = envs.step(action.cpu().numpy())  # vector_env's step!
+            next_obs, reward, done, infos = envs.step(
+                action.cpu().numpy()
+            )  # vector_env's step!
             rewards[step] = torch.tensor(reward).to(device).view(-1)
-            next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
+            next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(
+                done
+            ).to(device)
             if args.render:
-                envs.envs[0].render(mode='human_fast')
+                envs.envs[0].render(mode="human_fast")
 
             # Only print when at least 1 env is done
             # if "final_info" not in infos:
@@ -279,7 +332,7 @@ if __name__ == "__main__":
             for i, info in enumerate(infos):
                 # print(next_done[i], info["checkpoint_done"])
                 if next_done[i] or info["checkpoint_done"].all():
-                    rew = info['episode']['r']
+                    rew = info["episode"]["r"]
                     if rew > high_reward:
                         high_reward = rew
                         # torch.save({
@@ -288,9 +341,15 @@ if __name__ == "__main__":
                         #     'optimizer_state_dict': optimizer.state_dict(),
                         #     'reward': rew
                         # }, f"runs/{run_name}/global_step={global_step}_reward={rew}_model.pt")
-                    print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
-                    writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
-                    writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
+                    print(
+                        f"global_step={global_step}, episodic_return={info['episode']['r']}"
+                    )
+                    writer.add_scalar(
+                        "charts/episodic_return", info["episode"]["r"], global_step
+                    )
+                    writer.add_scalar(
+                        "charts/episodic_length", info["episode"]["l"], global_step
+                    )
                     envs.envs[i].reset()
         # bootstrap value if not done
         with torch.no_grad():
@@ -304,8 +363,12 @@ if __name__ == "__main__":
                 else:
                     nextnonterminal = 1.0 - dones[t + 1]
                     nextvalues = values[t + 1]
-                delta = rewards[t] + args.gamma * nextvalues * nextnonterminal - values[t]
-                advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
+                delta = (
+                    rewards[t] + args.gamma * nextvalues * nextnonterminal - values[t]
+                )
+                advantages[t] = lastgaelam = (
+                    delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
+                )
             returns = advantages + values
 
         # flatten the batch
@@ -325,7 +388,9 @@ if __name__ == "__main__":
                 end = start + args.minibatch_size
                 mb_inds = b_inds[start:end]
 
-                _, newlogprob, entropy, newvalue = agent.get_action_and_value(b_obs[mb_inds], b_actions[mb_inds])
+                _, newlogprob, entropy, newvalue = agent.get_action_and_value(
+                    b_obs[mb_inds], b_actions[mb_inds]
+                )
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
 
@@ -333,15 +398,21 @@ if __name__ == "__main__":
                     # calculate approx_kl http://joschu.net/blog/kl-approx.html
                     old_approx_kl = (-logratio).mean()
                     approx_kl = ((ratio - 1) - logratio).mean()
-                    clipfracs += [((ratio - 1.0).abs() > args.clip_coef).float().mean().item()]
+                    clipfracs += [
+                        ((ratio - 1.0).abs() > args.clip_coef).float().mean().item()
+                    ]
 
                 mb_advantages = b_advantages[mb_inds]
                 if args.norm_adv:
-                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (
+                        mb_advantages.std() + 1e-8
+                    )
 
                 # Policy loss
                 pg_loss1 = -mb_advantages * ratio
-                pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - args.clip_coef, 1 + args.clip_coef)
+                pg_loss2 = -mb_advantages * torch.clamp(
+                    ratio, 1 - args.clip_coef, 1 + args.clip_coef
+                )
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
                 # Value loss
@@ -384,7 +455,9 @@ if __name__ == "__main__":
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         # https://docs.cleanrl.dev/rl-algorithms/ppo/#explanation-of-the-logged-metrics
-        writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
+        writer.add_scalar(
+            "charts/learning_rate", optimizer.param_groups[0]["lr"], global_step
+        )
         writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
         writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
         writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
@@ -393,20 +466,25 @@ if __name__ == "__main__":
         writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
         # print("SPS:", int(global_step / (time.time() - start_time)))
-        writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+        writer.add_scalar(
+            "charts/SPS", int(global_step / (time.time() - start_time)), global_step
+        )
 
         if args.track and args.capture_video:
             for filename in os.listdir(f"videos/{run_name}"):
                 if filename not in video_filenames and filename.endswith(".mp4"):
                     wandb.log({f"videos": wandb.Video(f"videos/{run_name}/{filename}")})
                     video_filenames.add(filename)
-                    
+
         if (update % int(num_updates / 20)) == 0:
-            torch.save(agent.state_dict(), Path(f'nudge_2s_2obs_10m_'+str(save_count)+'.pkl'))  # !!!! change name
+            torch.save(
+                agent.state_dict(),
+                Path(f"nudge_2s_2obs_10m_" + str(save_count) + ".pkl"),
+            )  # !!!! change name
             print("save model")
             save_count += 1
 
-    model_path = Path(f'nudge_2s_2obs_10m.pkl')  # !!!! change name accordingly
+    model_path = Path(f"nudge_2s_2obs_10m.pkl")  # !!!! change name accordingly
     torch.save(agent.state_dict(), model_path)
 
     envs.close()

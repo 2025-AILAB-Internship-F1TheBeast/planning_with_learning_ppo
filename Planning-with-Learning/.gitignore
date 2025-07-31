@@ -1,0 +1,10 @@
+.idea
+__pycache__
+*.pyc
+*.nbc
+*.nbi
+gym/f110_gym.egg-info
+gym/gym_env
+runs
+plot
+models

@@ -243,7 +243,14 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    # Device setup
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")  # for m1mac
+    else:
+        device = torch.device("cpu")
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
@@ -268,7 +275,10 @@ if __name__ == "__main__":
     ), "only continuous action space is supported"
 
     agent = Agent(envs).to(device)
-    agent.load_state_dict(torch.load(f"pkls/bt_2s_pp_2m.pkl"))  # !!!! 回锅肉！
+    # agent.load_state_dict(torch.load(f"pkls/bt_2s_pp_2m.pkl"))  # !!!! 回锅肉！
+    agent.load_state_dict(
+        torch.load(f"pkls/bt_2s_pp_2m.pkl", map_location=device, weights_only=True)
+    )  # Setup for device
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # ALGO Logic: Storage setup
@@ -317,7 +327,10 @@ if __name__ == "__main__":
             next_obs, reward, done, infos = envs.step(
                 action.cpu().numpy()
             )  # vector_env's step!
-            rewards[step] = torch.tensor(reward).to(device).view(-1)
+            # rewards[step] = torch.tensor(reward).to(device).view(-1)
+            rewards[step] = (
+                torch.tensor(reward, dtype=torch.float32).to(device).view(-1)
+            )
             next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(
                 done
             ).to(device)
